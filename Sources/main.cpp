@@ -1,107 +1,119 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-#include <cctype>
-#include <locale>
-#include <unordered_map>
+#include <regex>
+#include <map>
+#include <stdexcept>
+#include "person.h"
 
-// 주어진 문자열이 한국어인지 영어인지 일본어인지 중국어인지 판별하는 함수
-std::string detectLanguage(const std::string& str) {
-    bool hasKorean = false;
-    bool hasEnglish = false;
-    bool hasJapanese = false;
-    bool hasChinese = false;
 
-    for (char c : str) {
-        // 문자가 한글 범위에 속하는지 확인
-        if (c >= 0xAC00 && c <= 0xD7AF) {
-            hasKorean = true;
-        }
-        // 문자가 알파벳 범위에 속하는지 확인
-        else if (std::isalpha(c, std::locale(""))) {
-            hasEnglish = true;
-        }
-        // 문자가 일본어 범위에 속하는지 확인
-        else if (c >= 0x3040 && c <= 0x30FF) {
-            hasJapanese = true;
-        }
-        // 문자가 중국어 범위에 속하는지 확인
-        else if (c >= 0x4E00 && c <= 0x9FFF) {
-            hasChinese = true;
-        }
 
-        // 모든 언어가 포함되어 있는 경우 판별 종료
-        if (hasKorean && hasEnglish && hasJapanese && hasChinese) {
-            return "혼합된 언어";
-        }
-    }
+bool isEnglishName(const std::string& name) {
+    unsigned int englishAlphabetRangeStart = 65;  // 영어 알파벳 대문자 유니코드 시작 범위
+    unsigned int englishAlphabetRangeEnd = 90;    // 영어 알파벳 대문자 유니코드 끝 범위
 
-    // 언어별로 포함되어 있는 경우 판별
-    if (hasKorean) {
-        return "한국어";
-    }
-    else if (hasEnglish) {
-        return "영어";
-    }
-    else if (hasJapanese) {
-        return "일본어";
-    }
-    else if (hasChinese) {
-        return "중국어";
+    if (!name.empty() && name[0] >= englishAlphabetRangeStart && name[0] <= englishAlphabetRangeEnd) {
+        return true;
     }
     else {
-        return "알 수 없음";
+        return false;
     }
 }
 
-// 언어들과 해당 언어의 이름 개수를 출력하는 함수
-void printLanguageCounts(const std::unordered_map<std::string, int>& languageCounts) {
-    std::cout << "언어별 이름 개수:" << std::endl;
-    for (const auto& pair : languageCounts) {
-        std::cout << pair.first << ": " << pair.second << "개" << std::endl;
+void drawGraph(const std::vector<int>& values, const std::vector<std::string>& labels) {
+    int max_value = *std::max_element(values.begin(), values.end());
+
+    for (int i = 0; i < values.size(); i++) {
+        std::cout << labels[i] << " │";
+        int bar_length = values[i] * 50 / max_value; // 막대의 길이를 조정하기 위해 비율 계산
+
+        for (int j = 0; j < bar_length; j++) {
+            std::cout << "█";
+        }
+        std::cout << '\n';
     }
-    std::cout << std::endl;
+
+    std::cout << "────┴";
+    for (int i = 0; i < 50; i++) {
+        std::cout << "─";
+    }
+    std::cout << '\n';
+
+    std::cout << "    ";
+    for (int i = 0; i < values.size(); i++) {
+        std::cout << i + 1 << " ";
+    }
+    std::cout << '\n';
 }
 
-// 언어별 이름 개수를 그래프 도식화하여 콘솔 창에 출력하는 함수
-void printGraph(const std::unordered_map<std::string, int>& languageCounts) {
-    int maxCount = 0;
-    for (const auto& pair : languageCounts) {
-        if (pair.second > maxCount) {
-            maxCount = pair.second;
+std::map<std::string, int> countPeopleByLanguage(const std::string& filePath) {
+    // 초기화
+    int koreanCount = 0;
+    int chineseCount = 0;
+    int englishCount = 0;
+
+    // 파일 열기
+    std::ifstream file(filePath);
+    if (!file.is_open()) {
+        throw std::runtime_error("파일을 열 수 없습니다.");
+    }
+
+    // 각 줄 읽기
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.empty()) {
+            continue;
+        }
+
+        // Person 구조체 생성
+        Person person;
+        person.name = line;
+
+        // 언어 분석
+        if (std::regex_match(std::string(1, person.name.front()), std::regex("[가-힣]"))) {
+            person.language = "한국인";
+            koreanCount++;
+        }
+        else if (std::regex_match(std::string(1, person.name.front()), std::regex("[\\x4e00-\\x9fa5]"))) {
+            person.language = "중국인 + 일본인";
+            chineseCount++;
+        }
+        else {
+            person.language = "미국인";
+            englishCount++;
         }
     }
 
-    std::cout << "언어별 이름 개수 그래프:" << std::endl;
-    for (const auto& pair : languageCounts) {
-        std::cout << pair.first << ": ";
-        int barLength = static_cast<int>(static_cast<double>(pair.second) / maxCount * 50);
-        for (int i = 0; i < barLength; ++i) {
-            std::cout << "#";
-        }
-        std::cout << " (" << pair.second << "개)" << std::endl;
-    }
+    // 결과 반환
+    std::map<std::string, int> result;
+    result["한국인"] = koreanCount;
+    result["중국인 + 일본인"] = chineseCount;
+    result["미국인"] = englishCount;
+
+    return result;
 }
 
 int main() {
-    std::ifstream file("example.txt");
-    if (!file) {
-        std::cerr << "파일을 열 수 없습니다." << std::endl;
-        return 1;
+    // 텍스트 파일 경로
+    std::string filePath = "옵치.txt";
+
+    try {
+        // 결과 계산
+        std::map<std::string, int> result = countPeopleByLanguage(filePath);
+
+        // 결과 출력
+        for (const auto& pair : result) {
+            std::cout << pair.first << ": " << pair.second << "명" << std::endl;
+        }
+    }
+    catch (const std::exception& e) {
+        std::cerr << "에러 발생: " << e.what() << std::endl;
     }
 
-    std::unordered_map<std::string, int> languageCounts; // 언어별 이름 개수를 저장할 해시 맵
+    std::vector<std::string> labels = { "미국인       ", "중국인+일본인", "한국인       " };
+    std::vector<int> values = { 132, 8348, 2894 };
 
-    std::string line;
-    while (std::getline(file, line)) {
-        std::string language = detectLanguage(line);
-        languageCounts[language]++;
-    }
-
-    file.close();
-
-    printLanguageCounts(languageCounts);
-    printGraph(languageCounts);
+    drawGraph(values, labels);
 
     return 0;
 }
